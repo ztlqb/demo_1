@@ -1,6 +1,7 @@
 const STORAGE_KEY_WRONG = 'exam_wrong_questions'
 const STORAGE_KEY_QUESTIONS = 'exam_questions'
 const STORAGE_KEY_FILENAME = 'exam_filename'
+const STORAGE_KEY_PRACTICE = 'exam_practice'
 
 export function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -22,4 +23,4 @@ export function removeFromStorage(key: string): void {
   } catch {}
 }
 
-export { STORAGE_KEY_WRONG, STORAGE_KEY_QUESTIONS, STORAGE_KEY_FILENAME }
+export { STORAGE_KEY_WRONG, STORAGE_KEY_QUESTIONS, STORAGE_KEY_FILENAME, STORAGE_KEY_PRACTICE }

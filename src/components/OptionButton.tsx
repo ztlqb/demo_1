@@ -14,10 +14,8 @@ interface OptionButtonProps {
 
 export default function OptionButton({ label, text, selected, result, isCorrectOption, isMultiple, disabled, onClick }: OptionButtonProps) {
   if (!text) return null
-
   let bgClass = 'bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50/50'
   let textClass = 'text-slate-700'
-
   if (result) {
     disabled = true
     if (isCorrectOption) {
@@ -34,38 +32,10 @@ export default function OptionButton({ label, text, selected, result, isCorrectO
     bgClass = 'bg-blue-50 border-blue-500 ring-2 ring-blue-200'
     textClass = 'text-blue-700'
   }
-
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`
-        w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2
-        transition-all duration-200 text-left
-        ${bgClass} ${textClass}
-        ${disabled ? 'cursor-default' : 'cursor-pointer active:scale-[0.98]'}
-      `}
-    >
-      <span className={`
-        w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0
-        ${result
-          ? isCorrectOption
-            ? 'bg-emerald-500 text-white'
-            : selected && result === 'wrong'
-              ? 'bg-red-500 text-white'
-              : 'bg-slate-200 text-slate-400'
-          : selected
-            ? 'bg-blue-500 text-white'
-            : 'bg-slate-100 text-slate-500'
-        }
-      `}>
-        {result ? (
-          isCorrectOption ? <CheckCircle size={18} /> :
-          selected && result === 'wrong' ? <XCircle size={18} /> :
-          label
-        ) : isMultiple ? (
-          <span className="text-xs">{selected ? '✓' : label}</span>
-        ) : label}
+    <button onClick={onClick} disabled={disabled} className={`w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 transition-all duration-200 text-left ${bgClass} ${textClass} ${disabled ? 'cursor-default' : 'cursor-pointer active:scale-[0.98]'}`}>
+      <span className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${result ? isCorrectOption ? 'bg-emerald-500 text-white' : selected && result === 'wrong' ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-400' : selected ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+        {result ? (isCorrectOption ? <CheckCircle size={18} /> : selected && result === 'wrong' ? <XCircle size={18} /> : label) : isMultiple ? (<span className="text-xs">{selected ? '✓' : label}</span>) : label}
       </span>
       <span className="text-[15px] leading-relaxed">{text}</span>
     </button>

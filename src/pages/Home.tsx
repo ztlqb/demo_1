@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { BookOpen, Trash2, BookX, Play, Upload } from 'lucide-react'
+import { BookOpen, Trash2, BookX, Play, Upload, RotateCcw, ArrowRight } from 'lucide-react'
 import { useQuestionStore } from '@/store/questionStore'
 import { useWrongStore } from '@/store/wrongStore'
 import { usePracticeStore } from '@/store/practiceStore'
@@ -8,18 +8,23 @@ export default function Home() {
   const navigate = useNavigate()
   const { questions, filename, isLoading, error, loadFromFile, clearQuestions } = useQuestionStore()
   const wrongCount = useWrongStore(s => s.wrongQuestions.length)
-  const startPractice = usePracticeStore(s => s.startPractice)
+  const { startPractice, hasUnfinished, isWrongPractice } = usePracticeStore()
   const getRandomQuestions = useQuestionStore(s => s.getRandomQuestions)
 
   const singleCount = questions.filter(q => q.type === 'single').length
   const multipleCount = questions.filter(q => q.type === 'multiple').length
   const judgeCount = questions.filter(q => q.type === 'judge').length
+  const hasUnfinishedPractice = hasUnfinished()
 
   const handleStartPractice = () => {
     const selected = getRandomQuestions(100)
     if (selected.length === 0) return
     startPractice(selected, false)
     navigate('/practice')
+  }
+
+  const handleContinuePractice = () => {
+    navigate(isWrongPractice ? '/practice/wrong' : '/practice')
   }
 
   const handleWrongPractice = () => {
@@ -82,35 +87,59 @@ export default function Home() {
           {questions.length > 0 && (
             <div className="mt-4 flex gap-2">
               {singleCount > 0 && (
-                <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium">
-                  单选 {singleCount}
-                </span>
-              )}
+              <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium">
+                单选 {singleCount}
+              </span>
+            )}
               {multipleCount > 0 && (
-                <span className="px-3 py-1 rounded-lg bg-purple-50 text-purple-600 text-xs font-medium">
-                  多选 {multipleCount}
-                </span>
-              )}
+              <span className="px-3 py-1 rounded-lg bg-purple-50 text-purple-600 text-xs font-medium">
+                多选 {multipleCount}
+              </span>
+            )}
               {judgeCount > 0 && (
-                <span className="px-3 py-1 rounded-lg bg-amber-50 text-amber-600 text-xs font-medium">
-                  判断 {judgeCount}
-                </span>
-              )}
+              <span className="px-3 py-1 rounded-lg bg-amber-50 text-amber-600 text-xs font-medium">
+                判断 {judgeCount}
+              </span>
+            )}
             </div>
           )}
         </div>
 
         {questions.length > 0 && (
           <div className="space-y-4 mt-4">
-            <button
-              onClick={handleStartPractice}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold text-lg
-                hover:from-blue-700 hover:to-blue-800 active:scale-[0.98] transition-all duration-200
-                shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
-            >
-              <Play size={20} />
-              开始练习（随机100题）
-            </button>
+            {hasUnfinishedPractice && (
+              <>
+                <button
+                  onClick={handleContinuePractice}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold text-lg
+                    hover:from-green-600 hover:to-green-700 active:scale-[0.98] transition-all duration-200
+                    shadow-lg shadow-green-200 flex items-center justify-center gap-2"
+                >
+                  <ArrowRight size={20} />
+                  继续练习
+                </button>
+                <button
+                  onClick={handleStartPractice}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold text-lg
+                    hover:from-blue-700 hover:to-blue-800 active:scale-[0.98] transition-all duration-200
+                    shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
+                >
+                  <RotateCcw size={20} />
+                  重新练习（随机100题）
+                </button>
+              </>
+            )}
+            {!hasUnfinishedPractice && (
+              <button
+                onClick={handleStartPractice}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold text-lg
+                  hover:from-blue-700 hover:to-blue-800 active:scale-[0.98] transition-all duration-200
+                  shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
+              >
+                <Play size={20} />
+                开始练习（随机100题）
+              </button>
+            )}
 
             {questions.length < 100 && (
               <p className="text-center text-sm text-amber-500">

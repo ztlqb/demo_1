@@ -1,92 +1,82 @@
 import * as XLSX from 'xlsx'
-import type { Question, OptionKey } from '@/types'
+import type { Question } from '@/types'
 
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
+interface ParseResult {
+  questions: Question[]
+  filename: string
 }
 
-function normalizeHeader(header: string): string {
-  return header.trim().replace(/\s+/g, '')
-}
-
-function findColumn(headers: string[], candidates: string[]): number {
-  for (const c of candidates) {
-    const idx = headers.findIndex(h => normalizeHeader(h).includes(c))
-    if (idx !== -1) return idx
-  }
-  return -1
-}
-
-export function parseExcelFile(file: File): Promise<{ questions: Question[]; filename: string }> {
+export async function parseExcelFile(file: File): Promise<ParseResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer)
-        const workbook = XLSX.read(data, { type: 'array' })
-        const sheetName = workbook.SheetNames[0]
-        const sheet = workbook.Sheets[sheetName]
-        const jsonData = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: '' })
-
-        if (jsonData.length === 0) {
-          reject(new Error('表格中没有数据'))
-          return
-        }
-
-        const headers = Object.keys(jsonData[0])
-        const colContent = findColumn(headers, ['题目', '题干', '问题', '内容'])
-        const colA = findColumn(headers, ['选项A', 'A', '选项a'])
-        const colB = findColumn(headers, ['选项B', 'B', '选项b'])
-        const colC = findColumn(headers, ['选项C', 'C', '选项c'])
-        const colD = findColumn(headers, ['选项D', 'D', '选项d'])
-        const colAnswer = findColumn(headers, ['答案', '正确答案', '正确选项'])
-
-        if (colContent === -1 || colAnswer === -1) {
-          reject(new Error('表格格式不正确，需要包含"题目"和"答案"列'))
-          return
-        }
+        const wb = XLSX.read(data, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: '' })
 
         const questions: Question[] = []
+        let idx = 0
 
-        for (const row of jsonData) {
-          const content = row[headers[colContent]]?.toString().trim()
-          const answerRaw = row[headers[colAnswer]]?.toString().trim().toUpperCase()
+        for (const row of json) {
+          const content = (row['题干'] || '').toString().trim()
+          const answerRaw = (row['答案'] || '').toString().trim()
+          const type = (row['题型'] || '').toString().trim()
+          const optA = (row['选项A'] || '').toString().trim()
+          const optB = (row['选项B'] || '').toString().trim()
+          const optC = (row['选项C'] || '').toString().trim()
+          const optD = (row['选项D'] || '').toString().trim()
+          const optE = (row['选项E'] || '').toString().trim()
+          const optF = (row['选项F'] || '').toString().trim()
+
           if (!content || !answerRaw) continue
 
-          const answer = answerRaw.charAt(0) as OptionKey
-          if (!['A', 'B', 'C', 'D'].includes(answer)) continue
+          let answer = ''
+          let qType: 'single' | 'multiple' | 'judge' = 'single'
+          const options: Question['options'] = {}
 
-          const optA = colA !== -1 ? row[headers[colA]]?.toString().trim() || '' : ''
-          const optB = colB !== -1 ? row[headers[colB]]?.toString().trim() || '' : ''
-          const optC = colC !== -1 ? row[headers[colC]]?.toString().trim() || '' : ''
-          const optD = colD !== -1 ? row[headers[colD]]?.toString().trim() || '' : ''
+          if (type === '多选题') {
+            qType = 'multiple'
+            answer = answerRaw.toUpperCase()
+            if (optA) options.A = optA
+            if (optB) options.B = optB
+            if (optC) options.C = optC
+            if (optD) options.D = optD
+            if (optE) options.E = optE
+            if (optF) options.F = optF
+          } else if (answerRaw === '对' || answerRaw === '错') {
+            qType = 'judge'
+            answer = answerRaw === '对' ? 'A' : 'B'
+            options.A = '对'
+            options.B = '错'
+          } else {
+            qType = 'single'
+            answer = answerRaw.toUpperCase().charAt(0)
+            if (optA) options.A = optA
+            if (optB) options.B = optB
+            if (optC) options.C = optC
+            if (optD) options.D = optD
+            if (optE) options.E = optE
+          }
 
+          idx++
           questions.push({
-            id: generateId(),
+            id: `q${idx.toString().padStart(4, '0')}`,
             content,
-            options: { A: optA, B: optB, C: optC, D: optD },
+            options,
             answer,
-            type: 'single' as const,
+            type: qType,
             analysis: '',
           })
         }
 
-        if (questions.length === 0) {
-          reject(new Error('未能从表格中解析出有效题目'))
-          return
-        }
-
-        resolve({ questions, filename: file.name })
+        resolve({ questions, filename: file.name.replace(/\.(xlsx|xls|csv)$/i, '') })
       } catch (err) {
-        reject(new Error('文件解析失败：' + (err instanceof Error ? err.message : String(err))))
+        reject(new Error('文件解析失败，请确保格式正确'))
       }
     }
     reader.onerror = () => reject(new Error('文件读取失败'))
     reader.readAsArrayBuffer(file)
   })
-}
-
-export function getRandomQuestions(questions: Question[], count: number): Question[] {
-  const shuffled = [...questions].sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, Math.min(count, shuffled.length))
 }

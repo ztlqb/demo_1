@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Question, OptionKey, AnswerResult } from '@/types'
 import { useWrongStore } from './wrongStore'
+import { loadFromStorage, saveToStorage, removeFromStorage, STORAGE_KEY_PRACTICE } from '@/utils/storage'
 
 interface PracticeState {
   questions: Question[]
@@ -17,118 +18,133 @@ interface PracticeState {
   goToQuestion: (index: number) => void
   resetPractice: () => void
   isFinished: () => boolean
+  hasUnfinished: () => boolean
   getStats: () => { total: number; correct: number; wrong: number; unanswered: number; accuracy: string }
 }
 
-export const usePracticeStore = create<PracticeState>((set, get) => ({
-  questions: [],
-  currentIndex: 0,
-  answers: {},
-  results: {},
-  isWrongPractice: false,
+function saveStateToStorage(state: Partial<PracticeState>) {
+  saveToStorage(STORAGE_KEY_PRACTICE, {
+    questions: state.questions,
+    currentIndex: state.currentIndex,
+    answers: state.answers,
+    results: state.results,
+    isWrongPractice: state.isWrongPractice,
+  })
+}
 
-  startPractice: (questions: Question[], isWrong = false) => {
-    set({
-      questions,
-      currentIndex: 0,
-      answers: {},
-      results: {},
-      isWrongPractice: isWrong,
-    })
-  },
+export const usePracticeStore = create<PracticeState>((set, get) => {
+  const saved = loadFromStorage<Partial<PracticeState>>(STORAGE_KEY_PRACTICE, {})
 
-  selectAnswer: (id: string, answer: OptionKey) => {
-    const results = get().results
-    if (results[id]) return
-    set({ answers: { ...get().answers, [id]: [answer] } })
-  },
+  return {
+    questions: saved.questions || [],
+    currentIndex: saved.currentIndex || 0,
+    answers: saved.answers || {},
+    results: saved.results || {},
+    isWrongPractice: saved.isWrongPractice || false,
 
-  toggleAnswer: (id: string, answer: OptionKey) => {
-    const results = get().results
-    if (results[id]) return
-    const current = get().answers[id] || []
-    const newAnswers = current.includes(answer)
-      ? current.filter(a => a !== answer)
-      : [...current, answer].sort()
-    set({ answers: { ...get().answers, [id]: newAnswers } })
-  },
+    startPractice: (questions: Question[], isWrong = false) => {
+      const state = { questions, currentIndex: 0, answers: {}, results: {}, isWrongPractice: isWrong }
+      set(state)
+      saveStateToStorage(state)
+    },
 
-  submitAnswer: (id: string) => {
-    const { answers, questions, results, isWrongPractice } = get()
-    if (results[id]) return
+    selectAnswer: (id: string, answer: OptionKey) => {
+      const results = get().results
+      if (results[id]) return
+      const newAnswers = { ...get().answers, [id]: [answer] }
+      const state = { answers: newAnswers }
+      set(state)
+      saveStateToStorage({ ...get(), ...state })
+    },
 
-    const question = questions.find(q => q.id === id)
-    const selectedAnswers = answers[id]
-    if (!question || !selectedAnswers || selectedAnswers.length === 0) return
+    toggleAnswer: (id: string, answer: OptionKey) => {
+      const results = get().results
+      if (results[id]) return
+      const current = get().answers[id] || []
+      const newAnswers = current.includes(answer)
+        ? current.filter(a => a !== answer)
+        : [...current, answer].sort()
+      const state = { answers: { ...get().answers, [id]: newAnswers } }
+      set(state)
+      saveStateToStorage({ ...get(), ...state })
+    },
 
-    const userAnswer = selectedAnswers.sort().join('')
-    const correctAnswer = question.answer.split('').sort().join('')
-    const isCorrect = userAnswer === correctAnswer
+    submitAnswer: (id: string) => {
+      const { answers, questions, results, isWrongPractice } = get()
+      if (results[id]) return
+      const question = questions.find(q => q.id === id)
+      const selectedAnswers = answers[id]
+      if (!question || !selectedAnswers || selectedAnswers.length === 0) return
+      const userAnswer = selectedAnswers.sort().join('')
+      const correctAnswer = question.answer.split('').sort().join('')
+      const isCorrect = userAnswer === correctAnswer
+      const newResults = { ...results, [id]: isCorrect ? 'correct' as const : 'wrong' as const }
+      const state = { results: newResults }
+      set(state)
+      saveStateToStorage({ ...get(), ...state })
+      if (!isCorrect) {
+        useWrongStore.getState().addWrongQuestion({ ...question, wrongAnswer: userAnswer, addedAt: Date.now() })
+      } else if (isWrongPractice) {
+        useWrongStore.getState().removeWrongQuestion(id)
+      }
+    },
 
-    const newResults = { ...results, [id]: isCorrect ? 'correct' as const : 'wrong' as const }
-    set({ results: newResults })
+    nextQuestion: () => {
+      const { currentIndex, questions } = get()
+      if (currentIndex < questions.length - 1) {
+        const state = { currentIndex: currentIndex + 1 }
+        set(state)
+        saveStateToStorage({ ...get(), ...state })
+      }
+    },
 
-    if (!isCorrect) {
-      useWrongStore.getState().addWrongQuestion({
-        ...question,
-        wrongAnswer: userAnswer,
-        addedAt: Date.now(),
-      })
-    } else if (isWrongPractice) {
-      useWrongStore.getState().removeWrongQuestion(id)
-    }
-  },
+    prevQuestion: () => {
+      const { currentIndex } = get()
+      if (currentIndex > 0) {
+        const state = { currentIndex: currentIndex - 1 }
+        set(state)
+        saveStateToStorage({ ...get(), ...state })
+      }
+    },
 
-  nextQuestion: () => {
-    const { currentIndex, questions } = get()
-    if (currentIndex < questions.length - 1) {
-      set({ currentIndex: currentIndex + 1 })
-    }
-  },
+    goToQuestion: (index: number) => {
+      const { questions } = get()
+      if (index >= 0 && index < questions.length) {
+        const state = { currentIndex: index }
+        set(state)
+        saveStateToStorage({ ...get(), ...state })
+      }
+    },
 
-  prevQuestion: () => {
-    const { currentIndex } = get()
-    if (currentIndex > 0) {
-      set({ currentIndex: currentIndex - 1 })
-    }
-  },
+    resetPractice: () => {
+      const state = { questions: [], currentIndex: 0, answers: {}, results: {}, isWrongPractice: false }
+      set(state)
+      removeFromStorage(STORAGE_KEY_PRACTICE)
+    },
 
-  goToQuestion: (index: number) => {
-    const { questions } = get()
-    if (index >= 0 && index < questions.length) {
-      set({ currentIndex: index })
-    }
-  },
+    isFinished: () => {
+      const { questions, results } = get()
+      return questions.length > 0 && questions.every(q => results[q.id])
+    },
 
-  resetPractice: () => {
-    set({
-      questions: [],
-      currentIndex: 0,
-      answers: {},
-      results: {},
-      isWrongPractice: false,
-    })
-  },
+    hasUnfinished: () => {
+      const { questions, results } = get()
+      return questions.length > 0 && !questions.every(q => results[q.id])
+    },
 
-  isFinished: () => {
-    const { questions, results } = get()
-    return questions.length > 0 && questions.every(q => results[q.id])
-  },
-
-  getStats: () => {
-    const { questions, results } = get()
-    const total = questions.length
-    let correct = 0
-    let wrong = 0
-    let unanswered = 0
-    for (const q of questions) {
-      const r = results[q.id]
-      if (r === 'correct') correct++
-      else if (r === 'wrong') wrong++
-      else unanswered++
-    }
-    const answered = correct + wrong
-    const accuracy = answered > 0 ? ((correct / answered) * 100).toFixed(1) : '0.0'
-    return { total, correct, wrong, unanswered, accuracy }
-  },
-}))
+    getStats: () => {
+      const { questions, results } = get()
+      const total = questions.length
+      let correct = 0, wrong = 0, unanswered = 0
+      for (const q of questions) {
+        const r = results[q.id]
+        if (r === 'correct') correct++
+        else if (r === 'wrong') wrong++
+        else unanswered++
+      }
+      const answered = correct + wrong
+      const accuracy = answered > 0 ? ((correct / answered) * 100).toFixed(1) : '0.0'
+      return { total, correct, wrong, unanswered, accuracy }
+    },
+  }
+})
